@@ -55,6 +55,12 @@ class KMeans:
         return distance_matrix.argmin(axis=1)
 
     def _update(self, data: Array) -> None:
+        """Update the cluster centroids based on the data.
+        Returns the within-cluster sum of squares for each cluster.
+
+        Args:
+            data (Array): Array of shape (n_samples, n_features)
+        """
         for cluster in range(self.n_clusters):
             predicted_labels = self.predict(data)
             cluster_samples = data[predicted_labels == cluster, :]
@@ -62,12 +68,88 @@ class KMeans:
                 cluster_samples.mean(axis=0)
             )
 
-    def update(self, data: Array, n_iterations: int = 1) -> None:
+    def update(self, data: Array, n_iterations: int = 1) -> Array:
         """Update the cluster centroids based on the data.
 
         Args:
             data (Array): Array of shape (n_samples, n_features)
             n_iterations (int, optional): number of times to perform centroid update. Defaults to 1.
+
+        Returns:
+            Array: an array of shape (n_iterations, n_clusters) containing the within-cluster sum of squares
+                for each cluster for each iteration.
         """
-        for _ in range(n_iterations):
+        wcss = jax.numpy.zeros((n_iterations, 1))
+        for iteration in range(n_iterations):
             self._update(data)
+            wcss_iteration = self.compute_wcss(data)
+            wcss = wcss.at[iteration, :].set(wcss_iteration)
+
+        return wcss
+
+    def compute_wcss(self, data: Array) -> Array:
+        """Computes the within-cluster sum of squares.
+
+        Args:
+            data (Array): Array of shape (n_samples, n_features)
+
+        Returns:
+            Array: an array of shape (1, ) containing the within-cluster sum of squares.
+        """
+
+        # TODO: optimize
+
+        wcss: Array = jax.numpy.zeros((1,))
+        predicted_labels = self.predict(data)
+        for cluster in range(self.n_clusters):
+            cluster_samples = data[predicted_labels == cluster, :]
+
+            if cluster_samples.shape[0] == 0:
+                continue
+
+            cluster_mean = cluster_samples.mean(axis=0)
+
+            # vector representing the distance of each sample to the cluster mean
+            dist_vector = cluster_samples - cluster_mean
+
+            # square of magnitude of the distance vector for each sample
+            abs_dist_square = jax.numpy.sum(dist_vector * dist_vector, axis=1)
+
+            # actual cluster wcss is the sum of the squares of the distances
+            wcss += jax.numpy.sum(abs_dist_square)
+
+        return wcss
+
+    def compute_silhouette_score(self, data: Array) -> Array:
+        """Computes the 3 silhouette scores for the clustering.
+
+        Args:
+            data (Array): Array of shape (n_samples, n_features).
+
+        Returns:
+            Array:
+        """
+
+        #
+        predicted_labels = self.predict(data)
+        mean_intra_cluster_distances = jax.numpy.zeros((data.shape[0],))
+
+        for cluster in range(self.n_clusters):
+            cluster_sample_idx = jax.numpy.where(predicted_labels == cluster)[0]
+            cluster_samples = data[cluster_sample_idx, :]
+
+            for sample_idx in cluster_sample_idx:
+                # data[sample_idx, :] is the sample from cluster ``cluster`` for
+                # which we are computing the mean distance to every other sanmple in the cluster
+                sample_distances = jax.numpy.linalg.norm(
+                    cluster_samples - data[sample_idx, :], axis=1
+                )
+                # we subtract 1 because the sample at sample_idx is not included in the mean
+                mean_distance_to_sample = jax.numpy.sum(sample_distances) / (
+                    cluster_samples.shape[0] - 1
+                )
+                mean_intra_cluster_distances = mean_intra_cluster_distances.at[
+                    sample_idx
+                ].set(mean_distance_to_sample)
+
+        return mean_intra_cluster_distances
