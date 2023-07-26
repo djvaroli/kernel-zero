@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from jax import Array
 
 
-def plot_clusters(
+def plot_clusters2d(
     data: Array,
     labels: Array,
     centroid_coords: Optional[Array] = None,
