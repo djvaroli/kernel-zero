@@ -1,2 +1,4 @@
+from .data import SyntheticClusters
 from .kmeans import KMeans
-from .utils import plot_clusters
+from .metrics import SilhouetteScore
+from .viz import plot_clusters2d
